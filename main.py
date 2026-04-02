@@ -81,5 +81,45 @@ def analyze_text(input: TextAnalysisInput):
         noun_chunks=[chunk.text for chunk in doc.noun_chunks],
         top_keywords=extract_keywords(doc),
     )
+
+
+@app.post("/summarize", tags=["NLP"], summary = "Extract the most important sentences")
+def summarize_text(input: TextAnalysisInput, top_n: int = 3):
+    """
+    Scores each sentence depending on how many keywords it contains.
+    Returns the top `n` sentences.
+    """
     
+    if not input.text.strip():
+        raise HTTPException(status_code = 400, detail = "Text cannot be empty")
+    
+    doc = nlp(input.text)
+    sentences = list(doc.sents)
+    
+    if len(sentences) <= top_n:
+        return {"summary": input.text, "sentence_count": len(sentences)}
+    
+    keywords = set(extract_keywords(doc))
+    
+    # score each sentence by keyword density
+    scores = {}
+    for sentence in sentences:
+        score = sum(
+            1 for token in sentence
+            if token.lemma_.lower() in keywords
+        )
+        scores[sentence.text] = score
+        
+    top_sentences = sorted(scores, key=scores.get, reverse=True)[:top_n]
+    
+    summary = " ".join(
+        sentence.text for sentence in sentences
+        if sentence.text in top_sentences
+    )
+    
+    return {
+        "summary": summary,
+        "original_sentence_count": len(sentences),
+        "summary_sentence_count": top_n,
+    }
     
